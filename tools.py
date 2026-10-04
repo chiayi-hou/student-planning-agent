@@ -162,13 +162,14 @@ def get_upcoming_assignments(course_id: str, canvas_token: str) -> str:
     """
     Get all Canvas assignments with a future due date for a specific course.
     """
-    
+
     if not canvas_token:
         return json.dumps({
-            "error": "CANVAS_TOKEN is not set."
+            "error": "Canvas is not connected."
         })
-    
-    now = datetime.now(timezone.utc)
+
+    eastern = ZoneInfo("America/New_York")
+    now = datetime.now(eastern)
 
     url = (
         f"{CANVAS_URL}/api/v1/courses/"
@@ -207,11 +208,14 @@ def get_upcoming_assignments(course_id: str, canvas_token: str) -> str:
             due_time = datetime.fromisoformat(
                 due_at.replace("Z", "+00:00")
             )
+
+            due_time_eastern = due_time.astimezone(eastern)
+
         except ValueError:
             continue
 
-        # Skip assignments whose due date has already passed
-        if due_time < now:
+        # Skip assignments whose due time has already passed
+        if due_time_eastern < now:
             continue
 
         description_html = assignment.get("description", "")
@@ -219,13 +223,19 @@ def get_upcoming_assignments(course_id: str, canvas_token: str) -> str:
 
         attachments = []
 
-        linked_files = get_linked_files(description_html, canvas_token)
+        linked_files = get_linked_files(
+            description_html,
+            canvas_token
+        )
 
         for file in linked_files:
             filename = file.get("display_name", "")
 
             try:
-                file_text = read_course_file(file, canvas_token)
+                file_text = read_course_file(
+                    file,
+                    canvas_token
+                )
 
                 if file_text:
                     attachments.append({
@@ -242,7 +252,10 @@ def get_upcoming_assignments(course_id: str, canvas_token: str) -> str:
         results.append({
             "assignment_id": assignment.get("id"),
             "name": assignment.get("name"),
-            "due_at": assignment.get("due_at"),
+
+            # Return due time in New York time
+            "due_at": due_time_eastern.isoformat(),
+
             "points_possible": assignment.get("points_possible"),
             "submission_types": assignment.get("submission_types"),
             "instructions": description_text,
