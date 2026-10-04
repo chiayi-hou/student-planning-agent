@@ -22,6 +22,41 @@
                 align-items: center;
                 padding: 3rem 1rem;
             }
+
+            #canvas-connect {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+
+                padding: 0.75rem 1rem;
+                border-bottom: 1px solid #e0e0e0;
+
+                background: rgba(255, 255, 255, 0.6);
+            }
+
+            #canvas-token {
+                flex: 1;
+                min-width: 0;
+
+                padding: 0.5rem 0.6rem;
+
+                border: 1px solid #d0d0d0;
+                border-radius: 6px;
+
+                font-size: 0.8rem;
+                outline: none;
+            }
+
+            #connect-canvas-btn {
+                padding: 0.5rem 0.8rem;
+                white-space: nowrap;
+            }
+
+            #canvas-status {
+                font-size: 0.75rem;
+                color: #666;
+            }
+
             #app-layout {
                 width: 95vw;
                 max-width: 1450px;
@@ -283,6 +318,19 @@
             </div>
 
             <div id="container">
+                <div id="canvas-connect">
+                    <input
+                        type="password"
+                        id="canvas-token"
+                        placeholder="Paste your Canvas access token"
+                        autocomplete="off"
+                    />
+                    <button id="connect-canvas-btn">
+                        Connect Canvas
+                    </button>
+                    <span id="canvas-status"></span>
+                </div>
+
                 <div id="messages"></div>
 
                 <div id="input-area">
@@ -302,16 +350,61 @@
         <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 
         <script>
+            const canvasToken = document.getElementById("canvas-token");
+            const connectCanvasBtn = document.getElementById("connect-canvas-btn");
+            const canvasStatus = document.getElementById("canvas-status");
+            
             const messages = document.getElementById("messages");
             const userInput = document.getElementById("user-input");
             const sendBtn = document.getElementById("send-btn");
 
             const scheduleContent = document.getElementById("schedule-content");
 
-            let sessionId = null;
+            let sessionId = crypto.randomUUID();
 
             const courseColors = new Map();
             let nextCourseColor = 0;
+
+            async function connectCanvas() {
+                const token = canvasToken.value.trim();
+
+                if (!token) {
+                    canvasStatus.textContent = "Enter a token first.";
+                    return;
+                }
+
+                connectCanvasBtn.disabled = true;
+                canvasStatus.textContent = "Connecting...";
+
+                try {
+                    const res = await fetch("/canvas-token", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            session_id: sessionId,
+                            token: token,
+                        }),
+                    });
+
+                    const data = await res.json();
+
+                    if (!res.ok) {
+                        throw new Error(
+                            data.detail || "Could not connect Canvas."
+                        );
+                    }
+
+                    canvasToken.value = "";
+                    canvasStatus.textContent = "Canvas connected ✓";
+                } catch (e) {
+                    canvasStatus.textContent =
+                        "Connection failed: " + e.message;
+                }
+
+                connectCanvasBtn.disabled = false;
+            }
 
             function extractSchedule(text) {
                 const pattern =
@@ -573,6 +666,11 @@
             );
 
             userInput.focus();
+
+            connectCanvasBtn.addEventListener(
+                "click",
+                connectCanvas
+            );
         </script>
     </body>
 </html>

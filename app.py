@@ -4,11 +4,11 @@ from pathlib import Path
 
 import litellm
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from tools import TOOLS, run_tool
+from tools import TOOLS, run_tool, test_canvas_token
 
 # --- Config ---
 
@@ -16,6 +16,13 @@ SYSTEM_PROMPT = (
    "You are a student planning assistant that helps users understand their upcoming "
     "assignments, estimate how long they will take, and decide when to start working on them. "
 
+    "Never assume that Canvas is connected. Do not claim that Canvas is connected based only "
+    "on the availability of Canvas tools or previous conversation. If the user asks whether "
+    "Canvas is connected, call get_courses to verify access for the current session. "
+    "If the tool succeeds, you may say Canvas is connected. If it fails because Canvas is not "
+    "connected or no token is available, tell the user to connect Canvas and confirm that the "
+    "interface shows 'Canvas connected'. "
+    
     "When the user asks about upcoming homework, assignments, workload, deadlines, or how "
     "long an assignment may take, call get_upcoming_assignments first. "
     "By default, only discuss assignments whose due dates have not yet passed. "
@@ -87,7 +94,10 @@ MAX_TOOL_ROUNDS = 5
 # --- The Harness ---
 
 
-def run_agent(messages: list[dict]) -> tuple[str, list[dict]]:
+def run_agent(
+    messages: list[dict],
+    canvas_token: str | None = None,
+) -> tuple[str, list[dict]]:
     """Complete until the model answers without asking for a tool.
 
     Returns the final text and a record of every tool call made along the way.
@@ -113,7 +123,7 @@ def run_agent(messages: list[dict]) -> tuple[str, list[dict]]:
         # The harness, not the model, runs each tool and appends the result
         for call in reply.tool_calls:
             args = json.loads(call.function.arguments)
-            result = run_tool(call.function.name, args)
+            result = run_tool(call.function.name, args, canvas_token=canvas_token,)
             tool_calls += [{"name": call.function.name, "args": args, "result": result}]
 
             messages += [{"role": "tool", "tool_call_id": call.id, "content": result}]
@@ -126,6 +136,9 @@ def run_agent(messages: list[dict]) -> tuple[str, list[dict]]:
 # session_id -> list of messages. In-memory, single process.
 sessions: dict[str, list] = {}
 
+# session_id -> Canvas access token
+canvas_tokens: dict[str, str] = {}
+
 # --- FastAPI App ---
 
 app = FastAPI()
@@ -135,6 +148,9 @@ class ChatRequest(BaseModel):
     message: str
     session_id: str | None = None
 
+class CanvasTokenRequest(BaseModel):
+    session_id: str
+    token: str
 
 class ChatResponse(BaseModel):
     response: str
@@ -146,6 +162,27 @@ class ChatResponse(BaseModel):
 def index():
     return FileResponse(Path(__file__).parent / "index.html")
 
+@app.post("/canvas-token")
+def set_canvas_token(request: CanvasTokenRequest):
+    token = request.token.strip()
+
+    if not token:
+        raise HTTPException(
+            status_code=400,
+            detail="Canvas token is empty.",
+        )
+
+    if not test_canvas_token(token):
+        raise HTTPException(
+            status_code=401,
+            detail="Canvas token is invalid.",
+        )
+
+    canvas_tokens[request.session_id] = token
+
+    return {
+        "status": "connected",
+    }
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
@@ -158,7 +195,7 @@ def chat(request: ChatRequest):
     sessions[session_id] += [{"role": "user", "content": request.message}]
 
     try:
-        response, tool_calls = run_agent(sessions[session_id])
+        response, tool_calls = run_agent(sessions[session_id], canvas_token=canvas_tokens.get(session_id))
     except Exception as e:
         # Auth, billing, a model that is not running: show it in the chat, not as a 500.
         response, tool_calls = f"Model call failed: {type(e).__name__}: {str(e)[:300]}", []
@@ -169,6 +206,7 @@ def chat(request: ChatRequest):
 @app.post("/clear")
 def clear(session_id: str | None = None):
     sessions.pop(session_id, None)
+    canvas_tokens.pop(session_id, None)
     return {"status": "ok"}
 
 if __name__ == "__main__":

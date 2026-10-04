@@ -17,23 +17,28 @@ from zoneinfo import ZoneInfo
 
 import os
 
-CANVAS_TOKEN = os.getenv("CANVAS_TOKEN")
-
-CANVAS_URL = "https://courseworks2.columbia.edu"
-
-HEADERS = {
-    "Authorization": f"Bearer {CANVAS_TOKEN}"
-}
-
-# api keys (to be removed)
-#CANVAS_TOKEN = "1396~vvT99B87vKyPE6yxtDzU8EBhkkJhVmhNr2QHCJEaLG7QE9fE8tW9rXKCLR9r3RCk"
 
 # define url used
 CANVAS_URL = "https://courseworks2.columbia.edu"
-HEADERS = {
-    "Authorization": f"Bearer {CANVAS_TOKEN}"
-}
 
+def get_canvas_headers(token: str) -> dict:
+    return {
+        "Authorization": f"Bearer {token}"
+    }
+
+def test_canvas_token(token: str) -> bool:
+    try:
+        response = requests.get(
+            f"{CANVAS_URL}/api/v1/users/self",
+            headers=get_canvas_headers(token),
+            timeout=10,
+        )
+
+        return response.ok
+
+    except requests.RequestException:
+        return False
+    
 def clean_html(html):
     if not html:
         return ""
@@ -42,10 +47,10 @@ def clean_html(html):
     return soup.get_text("\n", strip=True)
 
 
-def download_canvas_file(file):
+def download_canvas_file(file, canvas_token: str):
     response = requests.get(
         file["url"],
-        headers=HEADERS,
+        headers=get_canvas_headers(canvas_token),
         timeout=20,
     )
 
@@ -53,8 +58,8 @@ def download_canvas_file(file):
     return response.content
 
 
-def read_word_file(file):
-    content = download_canvas_file(file)
+def read_word_file(file, canvas_token: str):
+    content = download_canvas_file(file, canvas_token)
 
     document = Document(BytesIO(content))
 
@@ -76,8 +81,8 @@ def read_word_file(file):
     return "\n".join(text)
 
 
-def read_pdf_file(file):
-    content = download_canvas_file(file)
+def read_pdf_file(file, canvas_token: str):
+    content = download_canvas_file(file, canvas_token)
 
     reader = PdfReader(BytesIO(content))
 
@@ -92,21 +97,21 @@ def read_pdf_file(file):
     return "\n".join(text)
 
 
-def read_course_file(file):
+def read_course_file(file, canvas_token: str):
     filename = file.get(
         "display_name",
         ""
     ).lower()
 
     if filename.endswith(".docx"):
-        return read_word_file(file)
+        return read_word_file(file, canvas_token)
 
     if filename.endswith(".pdf"):
-        return read_pdf_file(file)
+        return read_pdf_file(file, canvas_token)
 
     return None
 
-def get_linked_files(description_html):
+def get_linked_files(description_html, canvas_token: str):
     if not description_html:
         return []
 
@@ -136,7 +141,7 @@ def get_linked_files(description_html):
         try:
             response = requests.get(
                 api_endpoint,
-                headers=HEADERS,
+                headers=get_canvas_headers(canvas_token),
                 timeout=10,
             )
 
@@ -153,16 +158,16 @@ def get_linked_files(description_html):
 
 
 # Tools
-def get_upcoming_assignments(course_id: str) -> str:
+def get_upcoming_assignments(course_id: str, canvas_token: str) -> str:
     """
     Get all Canvas assignments with a future due date for a specific course.
     """
-
-    if not CANVAS_TOKEN:
+    
+    if not canvas_token:
         return json.dumps({
             "error": "CANVAS_TOKEN is not set."
         })
-
+    
     now = datetime.now(timezone.utc)
 
     url = (
@@ -173,7 +178,7 @@ def get_upcoming_assignments(course_id: str) -> str:
     try:
         response = requests.get(
             url,
-            headers=HEADERS,
+            headers=get_canvas_headers(canvas_token),
             params={
                 "per_page": 100,
                 "include[]": "all_dates",
@@ -214,13 +219,13 @@ def get_upcoming_assignments(course_id: str) -> str:
 
         attachments = []
 
-        linked_files = get_linked_files(description_html)
+        linked_files = get_linked_files(description_html, canvas_token)
 
         for file in linked_files:
             filename = file.get("display_name", "")
 
             try:
-                file_text = read_course_file(file)
+                file_text = read_course_file(file, canvas_token)
 
                 if file_text:
                     attachments.append({
@@ -252,7 +257,8 @@ def get_upcoming_assignments(course_id: str) -> str:
 
 def get_course_file(
     course_id: str,
-    filename: str
+    filename: str,
+    canvas_token: str,
 ) -> str:
     """
     Find and read a PDF or Word file from a Canvas course.
@@ -261,7 +267,7 @@ def get_course_file(
     but that file was not already returned by get_upcoming_assignments.
     """
 
-    if not CANVAS_TOKEN:
+    if not canvas_token:
         return json.dumps({
             "error": "CANVAS_TOKEN is not set."
         })
@@ -274,7 +280,7 @@ def get_course_file(
     try:
         response = requests.get(
             url,
-            headers=HEADERS,
+            headers=get_canvas_headers(canvas_token),
             params={
                 "search_term": filename,
                 "per_page": 100,
@@ -327,7 +333,7 @@ def get_course_file(
 
     try:
         file_text = read_course_file(
-            selected_file
+            selected_file, canvas_token
         )
 
     except Exception as e:
@@ -352,7 +358,7 @@ def get_course_file(
         "content": file_text,
     })
 
-def get_courses() -> str:
+def get_courses(canvas_token: str) -> str:
     """
     Get the user's active Canvas courses.
 
@@ -368,7 +374,7 @@ def get_courses() -> str:
     try:
         response = requests.get(
             url,
-            headers=HEADERS,
+            headers=get_canvas_headers(canvas_token),
             params={
                 "enrollment_state": "active",
                 "per_page": 100,
@@ -398,96 +404,115 @@ def get_courses() -> str:
     })
 
 # What the model sees: the "set notes" in the screenplay.
-TOOLS = [
-   {
-    "type": "function",
-    "function": {
-        "name": "get_upcoming_assignments",
-        "description": (
-            "Get assignments that are due soon for a specific Canvas course. "
-            "Returns the Canvas assignment instructions and reads directly attached "
-            "PDF or Word files when available. Use this first when the user asks "
-            "about upcoming homework, workload, deadlines, or how long assignments may take."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "course_id": {
-                    "type": "string",
-                    "description": "The Canvas course ID."
+TOOLS = TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_upcoming_assignments",
+            "description": (
+                "Get all assignments with future due dates for a specific Canvas course. "
+                "Returns the Canvas assignment instructions and reads directly attached "
+                "PDF or Word files when available. Use this when the user asks about "
+                "upcoming homework, workload, deadlines, or how long assignments may take."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "course_id": {
+                        "type": "string",
+                        "description": "The Canvas course ID."
+                    }
                 },
-                "days": {
-                    "type": "integer",
-                    "description": (
-                        "Number of upcoming days to check. "
-                        "Use 14 if the user does not specify a time period."
-                    ),
-                    "minimum": 1
-                }
-            },
-            "required": ["course_id"]
+                "required": ["course_id"]
             }
         }
     },
     {
-    "type": "function",
-    "function": {
-        "name": "get_course_file",
-        "description": (
-            "Find and read a specific file from a Canvas course. "
-            "Use this when assignment instructions refer to a PDF or Word file "
-            "whose contents were not already returned by get_upcoming_assignments. "
-            "The tool searches for the file by name, downloads it, and returns its text."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "course_id": {
-                    "type": "string",
-                    "description": "The Canvas course ID."
+        "type": "function",
+        "function": {
+            "name": "get_course_file",
+            "description": (
+                "Find and read a specific file from a Canvas course. "
+                "Use this when assignment instructions refer to a PDF or Word file "
+                "whose contents were not already returned by get_upcoming_assignments. "
+                "The tool searches for the file by name, downloads it, and returns its text."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "course_id": {
+                        "type": "string",
+                        "description": "The Canvas course ID."
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": (
+                            "The file name mentioned in the assignment instructions, "
+                            "such as 'HW3.pdf' or 'Project Instructions.docx'."
+                        )
+                    }
                 },
-                "filename": {
-                    "type": "string",
-                    "description": (
-                        "The file name mentioned in the assignment instructions, "
-                        "such as 'HW3.pdf' or 'Project Instructions.docx'."
-                    )
-                }
-            },
-            "required": [
-                "course_id",
-                "filename"
-            ]
+                "required": [
+                    "course_id",
+                    "filename"
+                ]
             }
         }
     },
     {
-    "type": "function",
-    "function": {
-        "name": "get_courses",
-        "description": (
-            "Get the user's active Canvas courses and their course IDs. "
-            "Use this when a user refers to a course by name and the Canvas course ID "
-            "is not already known."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": [],
-            },
-        },
-    },
+        "type": "function",
+        "function": {
+            "name": "get_courses",
+            "description": (
+                "Get the user's active Canvas courses and their course IDs. "
+                "Use this when a user refers to a course by name and the Canvas course ID "
+                "is not already known."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    }
 ]
 
 # What the harness runs: tool name -> Python function.
 TOOL_MAP = {"get_upcoming_assignments": get_upcoming_assignments, "get_course_file": get_course_file, "get_courses": get_courses}
 
-
-def run_tool(name: str, args: dict) -> str:
+def run_tool(
+    name: str,
+    args: dict,
+    canvas_token: str | None = None,
+) -> str:
     """Run one tool call. Models invent tool names and arguments; never let that crash the loop."""
+
     if name not in TOOL_MAP:
-        return json.dumps({"error": f"Unknown tool '{name}'. Available: {list(TOOL_MAP)}"})
+        return json.dumps({
+            "error": f"Unknown tool '{name}'. Available: {list(TOOL_MAP)}"
+        })
+
+    canvas_tools = {
+        "get_courses",
+        "get_upcoming_assignments",
+        "get_course_file",
+    }
+
     try:
+        if name in canvas_tools:
+            if not canvas_token:
+                return json.dumps({
+                    "error": "Canvas is not connected. Please connect Canvas first."
+                })
+
+            args = {
+                **args,
+                "canvas_token": canvas_token,
+            }
+
         return TOOL_MAP[name](**args)
+
     except TypeError as e:
-        return json.dumps({"error": f"Bad arguments for {name}: {e}"})
+        return json.dumps({
+            "error": f"Bad arguments for {name}: {e}"
+        })
