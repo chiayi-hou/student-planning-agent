@@ -1,15 +1,19 @@
 <!doctype html>
+
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
         <title>Gemini Web Tool Calling</title>
+
         <style>
             * {
                 box-sizing: border-box;
                 margin: 0;
                 padding: 0;
             }
+
             body {
                 font-family: system-ui, sans-serif;
                 height: 100vh;
@@ -18,13 +22,64 @@
                 align-items: center;
                 padding: 3rem 1rem;
             }
+            #app-layout {
+                width: 95vw;
+                max-width: 1450px;
+                height: 85vh;
+
+                display: grid;
+                grid-template-columns: 1.7fr 1fr;
+                gap: 1.5rem;
+            }
+
+            #schedule-panel {
+                background: rgba(255, 255, 255, 0.55);
+                border: 1px solid #d8d8d8;
+                border-radius: 14px;
+
+                padding: 1.5rem;
+                overflow-y: auto;
+            }
+
+            #schedule-title {
+                font-size: 0.8rem;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: #777;
+                margin-bottom: 1rem;
+            }
+
+            #schedule-content {
+                line-height: 1.5;
+            }
+
             #container {
                 width: 100%;
-                max-width: 900px;
+                min-width: 0;
+
+                display: flex;
+                flex-direction: column;
+
+                background: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 14px;
+
+                overflow: hidden;
+            }
+
+            #messages {
+                flex: 1;
+                min-height: 0;
+                max-height: none;
+            }
+
+            #container {
+                width: 100%;
                 display: flex;
                 flex-direction: column;
                 border: 1px solid #e0e0e0;
             }
+
             #messages {
                 overflow-y: auto;
                 padding: 2rem;
@@ -34,14 +89,17 @@
                 min-height: 450px;
                 max-height: 70vh;
             }
+
             .msg {
                 line-height: 1.5;
                 max-width: 80%;
             }
+
             .msg.user {
                 align-self: flex-end;
                 text-align: right;
             }
+
             .msg .role {
                 font-size: 0.75rem;
                 text-transform: uppercase;
@@ -49,15 +107,18 @@
                 color: #999;
                 margin-bottom: 0.25rem;
             }
+
             .msg.loading .content {
                 color: #999;
             }
+
             #input-area {
                 display: flex;
                 gap: 1rem;
                 padding: 1.5rem;
                 border-top: 1px solid #e0e0e0;
             }
+
             #user-input {
                 flex: 1;
                 padding: 0.75rem 0;
@@ -66,9 +127,11 @@
                 font-size: 1rem;
                 outline: none;
             }
+
             #user-input:focus {
                 border-bottom-color: #000;
             }
+
             button {
                 padding: 0.75rem 1.5rem;
                 background: #000;
@@ -79,6 +142,7 @@
                 letter-spacing: 0.05em;
                 cursor: pointer;
             }
+
             .tool {
                 font-family: ui-monospace, monospace;
                 font-size: 0.75rem;
@@ -90,104 +154,424 @@
                 white-space: pre-wrap;
                 word-break: break-word;
             }
+
             .tool .label {
                 text-transform: uppercase;
                 letter-spacing: 0.05em;
                 color: #b45309;
             }
+
+            .tool .tool-text {
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+
+            .tool .tool-text.collapsed {
+                max-height: 72px;
+                overflow: hidden;
+            }
+
+            .tool .toggle {
+                display: inline-block;
+                margin-top: 0.4rem;
+                color: #2563eb;
+                text-decoration: underline;
+                cursor: pointer;
+                font-family: system-ui, sans-serif;
+            }
+
             button:disabled {
                 opacity: 0.3;
             }
+
+            .msg .content p {
+                margin: 0 0 0.75em;
+            }
+
+            .msg .content p:last-child {
+                margin-bottom: 0;
+            }
+
+            .msg .content ul,
+            .msg .content ol {
+                margin: 0 0 0.75em 1.25em;
+            }
+
+            .msg .content h1,
+            .msg .content h2,
+            .msg .content h3 {
+                margin: 1em 0 0.5em;
+                line-height: 1.3;
+            }
+
+            .msg .content h1:first-child,
+            .msg .content h2:first-child,
+            .msg .content h3:first-child {
+                margin-top: 0;
+            }
+
+            .msg .content code {
+                font-family: ui-monospace, monospace;
+                background: #f5f5f5;
+                padding: 0.1em 0.3em;
+                border-radius: 3px;
+                font-size: 0.9em;
+            }
+
+            .msg .content pre {
+                background: #f5f5f5;
+                padding: 0.75rem;
+                overflow-x: auto;
+                margin: 0 0 0.75em;
+                border-radius: 4px;
+            }
+
+            .msg .content pre code {
+                background: none;
+                padding: 0;
+            }
+
+            .msg .content a {
+                color: inherit;
+            }
+
+            .msg .content hr {
+                border: none;
+                border-top: 1px solid #e0e0e0;
+                margin: 0.75em 0;
+            }
+
+            .course-card {
+                padding: 1rem 1.2rem;
+                border-radius: 10px;
+                margin: 0.75rem 0;
+            }
+
+            .course-card h2 {
+                margin-top: 0;
+                margin-bottom: 0.75rem;
+                font-size: 1.05rem;
+            }
+
+            .course-color-0 {
+                background: rgba(165, 140, 220, 0.42);
+            }
+
+            .course-color-1 {
+                background: rgba(90, 95, 170, 0.28);
+            }
+
+            .course-color-2 {
+                background: rgba(110, 180, 135, 0.38);
+            }
+
+            .course-color-3 {
+                background: rgba(250, 209, 214, 0.60);
+            }
+
+            .course-color-4 {
+                background: rgba(119, 182, 194, 0.38);
+            }
         </style>
     </head>
+
     <body>
-        <div id="container">
-            <div id="messages"></div>
-            <div id="input-area">
-                <input
-                    type="text"
-                    id="user-input"
-                    placeholder="Type a message..."
-                    autocomplete="off"
-                />
-                <button id="send-btn">Send</button>
+        <div id="app-layout">
+            <div id="schedule-panel">
+                <div id="schedule-title">Study Plan</div>
+                <div id="schedule-content"></div>
+            </div>
+
+            <div id="container">
+                <div id="messages"></div>
+
+                <div id="input-area">
+                    <input
+                        type="text"
+                        id="user-input"
+                        placeholder="Type a message..."
+                        autocomplete="off"
+                    />
+
+                    <button id="send-btn">Send</button>
+                </div>
             </div>
         </div>
+
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+
         <script>
             const messages = document.getElementById("messages");
             const userInput = document.getElementById("user-input");
             const sendBtn = document.getElementById("send-btn");
+
+            const scheduleContent = document.getElementById("schedule-content");
+
             let sessionId = null;
+
+            const courseColors = new Map();
+            let nextCourseColor = 0;
+
+            function extractSchedule(text) {
+                const pattern =
+                    /\[\[SCHEDULE_START\]\]([\s\S]*?)\[\[SCHEDULE_END\]\]/;
+
+                const match = text.match(pattern);
+
+                if (!match) {
+                    return {
+                        schedule: null,
+                        chatText: text,
+                    };
+                }
+
+                const schedule = match[1].trim();
+
+                const chatText = text
+                    .replace(pattern, "")
+                    .trim();
+
+                return {
+                    schedule,
+                    chatText,
+                };
+            }
+
+            function getCourseColor(courseName) {
+                if (!courseColors.has(courseName)) {
+                    courseColors.set(
+                        courseName,
+                        nextCourseColor % 5
+                    );
+
+                    nextCourseColor += 1;
+                }
+
+                return courseColors.get(courseName);
+            }
+
+            function renderMarkdown(el, text) {
+                const html = marked.parse(text, { breaks: true });
+                el.innerHTML = DOMPurify.sanitize(html);
+
+                const headings = Array.from(
+                    el.querySelectorAll("h2")
+                );
+
+                for (const heading of headings) {
+                    const headingText =
+                        heading.textContent.trim();
+
+                    if (!headingText.startsWith("COURSE:")) {
+                        continue;
+                    }
+
+                    const courseName = headingText
+                        .replace("COURSE:", "")
+                        .trim();
+
+                    heading.textContent = courseName;
+
+                    const card =
+                        document.createElement("div");
+
+                    const colorIndex =
+                        getCourseColor(courseName);
+
+                    card.className =
+                        "course-card course-color-" +
+                        colorIndex;
+
+                    heading.parentNode.insertBefore(
+                        card,
+                        heading
+                    );
+
+                    card.appendChild(heading);
+
+                    let next = card.nextSibling;
+
+                    while (next) {
+                        if (
+                            next.nodeType === Node.ELEMENT_NODE &&
+                            next.tagName === "H2" &&
+                            next.textContent
+                                .trim()
+                                .startsWith("COURSE:")
+                        ) {
+                            break;
+                        }
+
+                        const current = next;
+                        next = next.nextSibling;
+
+                        card.appendChild(current);
+                    }
+                }
+            }
 
             function addMessage(role, text, isLoading = false) {
                 const div = document.createElement("div");
+
                 div.className =
                     "msg " +
                     (role === "you" ? "user" : "assistant") +
                     (isLoading ? " loading" : "");
-                div.innerHTML =
-                    '<div class="role">' +
-                    role +
-                    '</div><div class="content">' +
-                    text +
-                    "</div>";
+
+                const roleEl = document.createElement("div");
+                roleEl.className = "role";
+                roleEl.textContent = role;
+
+                const contentEl = document.createElement("div");
+                contentEl.className = "content";
+
+                if (role === "you" || isLoading) {
+                    contentEl.textContent = text;
+                } else {
+                    renderMarkdown(contentEl, text);
+                }
+
+                div.appendChild(roleEl);
+                div.appendChild(contentEl);
+
                 messages.appendChild(div);
                 messages.scrollTop = messages.scrollHeight;
+
                 return div;
             }
 
             async function send() {
                 const text = userInput.value.trim();
+
                 if (!text) return;
 
                 userInput.value = "";
                 sendBtn.disabled = true;
+
                 addMessage("you", text);
-                const loading = addMessage("assistant", "Thinking...", true);
+
+                const loading = addMessage(
+                    "assistant",
+                    "Thinking...",
+                    true,
+                );
 
                 try {
                     const res = await fetch("/chat", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+
                         body: JSON.stringify({
                             message: text,
                             session_id: sessionId,
                         }),
                     });
+
                     const data = await res.json();
+
                     sessionId = data.session_id;
 
-                    // Show each tool the harness ran, above the assistant's answer
+                    // Show each tool the harness ran above the assistant's answer
                     for (const call of data.tool_calls || []) {
                         const div = document.createElement("div");
                         div.className = "tool";
+
                         const label = document.createElement("span");
                         label.className = "label";
                         label.textContent = "tool call  ";
+
                         div.appendChild(label);
-                        div.appendChild(
-                            document.createTextNode(
-                                call.name + "(" + JSON.stringify(call.args) + ")\n→ " + call.result,
-                            ),
-                        );
+
+                        const fullText =
+                            call.name +
+                            "(" +
+                            JSON.stringify(call.args) +
+                            ")\n→ " +
+                            call.result;
+
+                        const textEl = document.createElement("div");
+                        textEl.className = "tool-text collapsed";
+                        textEl.textContent = fullText;
+
+                        div.appendChild(textEl);
+
+                        // Add the tool box first so the browser can calculate
+                        // whether the text is actually taller than 3 lines.
                         messages.insertBefore(div, loading);
+
+                        const isTruncated =
+                            textEl.scrollHeight > textEl.clientHeight;
+
+                        if (isTruncated) {
+                            const toggle =
+                                document.createElement("span");
+
+                            toggle.className = "toggle";
+                            toggle.textContent = "Read more";
+
+                            let expanded = false;
+
+                            toggle.addEventListener("click", () => {
+                                expanded = !expanded;
+
+                                textEl.classList.toggle(
+                                    "collapsed",
+                                    !expanded,
+                                );
+
+                                toggle.textContent = expanded
+                                    ? "Show less"
+                                    : "Read more";
+
+                                messages.scrollTop =
+                                    messages.scrollHeight;
+                            });
+
+                            div.appendChild(toggle);
+                        } else {
+                            textEl.classList.remove("collapsed");
+                        }
                     }
-                    loading.querySelector(".content").textContent =
-                        data.response;
+
+                    const parsed = extractSchedule(data.response);
+
+                    if (parsed.schedule !== null) {
+                        renderMarkdown(
+                            scheduleContent,
+                            parsed.schedule
+                        );
+                    }
+
+                    renderMarkdown(
+                        loading.querySelector(".content"),
+                        parsed.chatText || "I've updated your study plan."
+                    );
+
                     loading.classList.remove("loading");
                 } catch (e) {
                     loading.querySelector(".content").textContent =
                         "Error: " + e.message;
+
                     loading.classList.remove("loading");
                 }
+
                 sendBtn.disabled = false;
                 userInput.focus();
             }
 
             sendBtn.addEventListener("click", send);
-            userInput.addEventListener("keydown", function (e) {
-                if (e.key === "Enter") send();
-            });
+
+            userInput.addEventListener(
+                "keydown",
+                function (e) {
+                    if (e.key === "Enter") send();
+                },
+            );
+
             userInput.focus();
         </script>
     </body>
