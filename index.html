@@ -307,6 +307,45 @@
             .course-color-4 {
                 background: rgba(119, 182, 194, 0.38);
             }
+
+            #schedule-content h1 {
+                font-size: 1.35rem;
+                font-weight: 700;
+                margin: 1.25rem 0 0.8rem;
+                color: #444;
+            }
+
+            #schedule-content h1:first-child {
+                margin-top: 0;
+            }
+
+            #schedule-content .schedule-date {
+                font-size: 1.35rem;
+                font-weight: 700;
+                margin: 1.25rem 0 0.8rem;
+                color: #444;
+            }
+
+            #schedule-content .schedule-time {
+                font-weight: 700;
+                margin-bottom: 0.5rem;
+            }
+
+            #schedule-content .course-card {
+                padding: 1rem 1.2rem;
+                border-radius: 14px;
+                margin: 0 0 0.9rem;
+            }
+
+            #schedule-content .course-card h2 {
+                margin: 0 0 0.65rem;
+                font-size: 1.05rem;
+                line-height: 1.35;
+            }
+
+            #schedule-content .course-card p {
+                margin: 0.35rem 0;
+            }
         </style>
     </head>
 
@@ -504,6 +543,96 @@
                 }
             }
 
+            function renderSchedule(el, text) {
+                const html = marked.parse(text, { breaks: true });
+                el.innerHTML = DOMPurify.sanitize(html);
+
+                const originalChildren = Array.from(el.children);
+                el.innerHTML = "";
+
+                let currentDateSection = null;
+
+                for (let i = 0; i < originalChildren.length; i++) {
+                    const node = originalChildren[i];
+
+                    // Date heading: # Monday, October 5
+                    if (node.tagName === "H1") {
+                        const dateHeading = document.createElement("div");
+                        dateHeading.className = "schedule-date";
+                        dateHeading.textContent = node.textContent.trim();
+
+                        el.appendChild(dateHeading);
+
+                        currentDateSection = el;
+                        continue;
+                    }
+
+                    // Course block start: ## COURSE: ...
+                    if (
+                        node.tagName === "H2" &&
+                        node.textContent.trim().startsWith("COURSE:")
+                    ) {
+                        const rawCourseName = node.textContent
+                            .replace("COURSE:", "")
+                            .trim();
+
+                        const colorIndex = getCourseColor(rawCourseName);
+
+                        const card = document.createElement("div");
+                        card.className =
+                            "course-card course-color-" + colorIndex;
+
+                        const courseTitle = document.createElement("h2");
+                        courseTitle.textContent = rawCourseName;
+                        card.appendChild(courseTitle);
+
+                        let j = i + 1;
+
+                        while (j < originalChildren.length) {
+                            const nextNode = originalChildren[j];
+
+                            // stop at next date
+                            if (nextNode.tagName === "H1") {
+                                break;
+                            }
+
+                            // stop at next course block
+                            if (
+                                nextNode.tagName === "H2" &&
+                                nextNode.textContent.trim().startsWith("COURSE:")
+                            ) {
+                                break;
+                            }
+
+                            // clone the node so we can style it
+                            const cloned = nextNode.cloneNode(true);
+
+                            // if it's the first paragraph and bold-only, treat as time
+                            if (
+                                cloned.tagName === "P" &&
+                                cloned.textContent.trim().length > 0
+                            ) {
+                                const strong = cloned.querySelector("strong");
+
+                                if (
+                                    strong &&
+                                    strong.textContent.trim() ===
+                                        cloned.textContent.trim()
+                                ) {
+                                    cloned.classList.add("schedule-time");
+                                }
+                            }
+
+                            card.appendChild(cloned);
+                            j += 1;
+                        }
+
+                        el.appendChild(card);
+                        i = j - 1;
+                    }
+                }
+            }
+
             function addMessage(role, text, isLoading = false) {
                 const div = document.createElement("div");
 
@@ -633,7 +762,7 @@
                     const parsed = extractSchedule(data.response);
 
                     if (parsed.schedule !== null) {
-                        renderMarkdown(
+                        renderSchedule(
                             scheduleContent,
                             parsed.schedule
                         );

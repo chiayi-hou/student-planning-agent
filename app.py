@@ -62,7 +62,7 @@ SYSTEM_PROMPT = (
     "the same color to the same course. "
     "Use this format even when only one course is being discussed. "
 
-    "When creating or updating a study schedule, organize the entire schedule in chronological "
+   "When creating or updating a study schedule, organize the entire schedule in chronological "
     "order across all courses, from the earliest day and time to the latest. Do not group the "
     "schedule by course, and do not assume the user should finish one course before working on "
     "another. Interleave work from different courses when appropriate based on due dates, "
@@ -73,22 +73,19 @@ SYSTEM_PROMPT = (
     "the interface to display the schedule separately from the conversation. Do not use these "
     "markers unless you are actually creating or updating a schedule. "
 
-    "Only emit the schedule markers when you are actually creating a new schedule or changing "
-    "the existing schedule. If the user is only asking a question about the current plan, answer "
-    "normally without emitting the schedule markers. "
-
     "Always provide the complete current schedule inside the schedule markers, not only the "
     "parts that changed. A newly generated schedule replaces the previously displayed schedule. "
 
-    "Inside the schedule, every scheduled study block that belongs to a course must start with "
-    "a Markdown level-2 heading in exactly this format: '## COURSE: Course Name'. Immediately "
-    "below it, state the day, start time, end time, and the specific task to work on. The same "
-    "course heading may appear multiple times when work for that course is split across different "
-    "times. Keep all blocks in chronological order regardless of course. "
+    "Inside the schedule, group study blocks by date. Start each date with a Markdown level-1 "
+    "heading in exactly this style: '# Monday, October 5'. Under each date heading, each study "
+    "block that belongs to a course must start with a Markdown level-2 heading in exactly this "
+    "format: '## COURSE: Course Name'. On the next line, write the time range in bold, such as "
+    "'**2:00 PM – 4:00 PM**'. On the following line, write the specific task to work on. "
+    "Keep the dates and all study blocks in chronological order. "
 
     "Outside the schedule markers, briefly explain the plan or any important reasoning to the "
     "user. Do not repeat the full schedule outside the markers. "
-)
+    )
 MAX_TOOL_ROUNDS = 5
 
 # --- The Harness ---
