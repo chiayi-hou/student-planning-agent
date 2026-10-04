@@ -591,23 +591,23 @@
                         while (j < originalChildren.length) {
                             const nextNode = originalChildren[j];
 
-                            // stop at next date
+                            // A new date starts — stop the current course card
                             if (nextNode.tagName === "H1") {
                                 break;
                             }
 
-                            // stop at next course block
+                            // A new course block starts — stop the current course card
                             if (
                                 nextNode.tagName === "H2" &&
-                                nextNode.textContent.trim().startsWith("COURSE:")
+                                nextNode.textContent
+                                    .trim()
+                                    .startsWith("COURSE:")
                             ) {
                                 break;
                             }
 
-                            // clone the node so we can style it
                             const cloned = nextNode.cloneNode(true);
 
-                            // if it's the first paragraph and bold-only, treat as time
                             if (
                                 cloned.tagName === "P" &&
                                 cloned.textContent.trim().length > 0
