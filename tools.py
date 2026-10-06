@@ -21,6 +21,8 @@ import os
 # define url used
 CANVAS_URL = "https://courseworks2.columbia.edu"
 
+# Helper Functions
+
 def get_canvas_headers(token: str) -> dict:
     return {
         "Authorization": f"Bearer {token}"
@@ -46,7 +48,6 @@ def clean_html(html):
     soup = BeautifulSoup(html, "html.parser")
     return soup.get_text("\n", strip=True)
 
-
 def download_canvas_file(file, canvas_token: str):
     response = requests.get(
         file["url"],
@@ -56,7 +57,6 @@ def download_canvas_file(file, canvas_token: str):
 
     response.raise_for_status()
     return response.content
-
 
 def read_word_file(file, canvas_token: str):
     content = download_canvas_file(file, canvas_token)
@@ -80,7 +80,6 @@ def read_word_file(file, canvas_token: str):
 
     return "\n".join(text)
 
-
 def read_pdf_file(file, canvas_token: str):
     content = download_canvas_file(file, canvas_token)
 
@@ -95,7 +94,6 @@ def read_pdf_file(file, canvas_token: str):
             text.append(page_text)
 
     return "\n".join(text)
-
 
 def read_course_file(file, canvas_token: str):
     filename = file.get(
@@ -156,6 +154,18 @@ def get_linked_files(description_html, canvas_token: str):
 
     return files
 
+def get_canvas_user_context_code(canvas_token: str) -> str:
+    response = requests.get(
+        f"{CANVAS_URL}/api/v1/users/self",
+        headers=get_canvas_headers(canvas_token),
+        timeout=10,
+    )
+
+    response.raise_for_status()
+
+    user = response.json()
+
+    return f"user_{user['id']}"
 
 # Tools
 def get_upcoming_assignments(course_id: str, canvas_token: str) -> str:
@@ -416,6 +426,127 @@ def get_courses(canvas_token: str) -> str:
         "courses": results
     })
 
+def add_study_plan_to_canvas_calendar(
+    events: list[dict],
+    canvas_token: str,
+) -> str:
+    """
+    Add an approved study plan to the user's Canvas Calendar
+    and My To Do list.
+    """
+
+    if not canvas_token:
+        return json.dumps({
+            "error": "Canvas is not connected."
+        })
+
+    if not events:
+        return json.dumps({
+            "error": "No study plan events were provided."
+        })
+
+    try:
+        context_code = get_canvas_user_context_code(
+            canvas_token
+        )
+
+    except requests.RequestException as e:
+        return json.dumps({
+            "error": f"Could not identify Canvas user: {e}"
+        })
+
+    created_events = []
+    created_todos = []
+    failed_items = []
+
+    for event in events:
+        try:
+            # -------------------------
+            # 1. Add to Canvas Calendar
+            # -------------------------
+
+            calendar_response = requests.post(
+                f"{CANVAS_URL}/api/v1/calendar_events",
+                headers=get_canvas_headers(canvas_token),
+                data={
+                    "calendar_event[context_code]": context_code,
+                    "calendar_event[title]": event["title"],
+                    "calendar_event[start_at]": event["start_at"],
+                    "calendar_event[end_at]": event["end_at"],
+                    "calendar_event[description]": event.get(
+                        "description",
+                        "",
+                    ),
+                    "calendar_event[time_zone_edited]":
+                        "America/New_York",
+                },
+                timeout=10,
+            )
+
+            calendar_response.raise_for_status()
+
+            created = calendar_response.json()
+
+            created_events.append({
+                "id": created.get("id"),
+                "title": created.get("title"),
+                "start_at": created.get("start_at"),
+                "end_at": created.get("end_at"),
+            })
+
+            # -------------------------
+            # 2. Add to Canvas My To Do
+            # -------------------------
+
+            start_time = datetime.fromisoformat(
+                event["start_at"]
+            )
+
+            todo_date = start_time.date().isoformat()
+
+            todo_response = requests.post(
+                f"{CANVAS_URL}/api/v1/planner_notes",
+                headers=get_canvas_headers(canvas_token),
+                data={
+                    "title": event["title"],
+                    "details": event.get(
+                        "description",
+                        "",
+                    ),
+                    "todo_date": todo_date,
+                },
+                timeout=10,
+            )
+
+            todo_response.raise_for_status()
+
+            todo = todo_response.json()
+
+            created_todos.append({
+                "id": todo.get("id"),
+                "title": todo.get("title"),
+                "todo_date": todo.get("todo_date"),
+            })
+
+        except (
+            requests.RequestException,
+            KeyError,
+            ValueError,
+        ) as e:
+            failed_items.append({
+                "title": event.get("title"),
+                "error": str(e),
+            })
+
+    return json.dumps({
+        "calendar_events_created": len(created_events),
+        "todos_created": len(created_todos),
+        "failed_count": len(failed_items),
+        "created_events": created_events,
+        "created_todos": created_todos,
+        "failed_items": failed_items,
+    })
+
 # What the model sees: the "set notes" in the screenplay.
 TOOLS = TOOLS = [
     {
@@ -487,11 +618,76 @@ TOOLS = TOOLS = [
                 "required": []
             }
         }
-    }
+    },
+    {
+    "type": "function",
+    "function": {
+        "name": "add_study_plan_to_canvas_calendar",
+        "description": (
+            "Add the user's approved current study plan to their personal "
+            "Canvas Calendar and My To Do list. Each study block is added as "
+            "a timed calendar event and also as a Canvas planner note. "
+            "Only use this when the user explicitly asks to add, save, or post "
+            "the current study schedule to Canvas."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "events": {
+                    "type": "array",
+                    "description": (
+                        "Every study block in the complete current study plan."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string",
+                                "description": (
+                                    "Short Canvas event title containing the "
+                                    "course name and task."
+                                ),
+                            },
+                            "start_at": {
+                                "type": "string",
+                                "description": (
+                                    "Event start time in ISO 8601 format with "
+                                    "timezone offset, for example "
+                                    "'2026-10-06T14:00:00-04:00'."
+                                ),
+                            },
+                            "end_at": {
+                                "type": "string",
+                                "description": (
+                                    "Event end time in ISO 8601 format with "
+                                    "timezone offset."
+                                ),
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": (
+                                    "The specific work planned for this study block."
+                                ),
+                            },
+                        },
+                        "required": [
+                            "title",
+                            "start_at",
+                            "end_at",
+                            "description",
+                        ],
+                    },
+                }
+            },
+            "required": ["events"],
+            },
+        },
+    },
 ]
 
 # What the harness runs: tool name -> Python function.
-TOOL_MAP = {"get_upcoming_assignments": get_upcoming_assignments, "get_course_file": get_course_file, "get_courses": get_courses}
+TOOL_MAP = {"get_upcoming_assignments": get_upcoming_assignments, "get_course_file": get_course_file, "get_courses": get_courses,
+            "add_study_plan_to_canvas_calendar": add_study_plan_to_canvas_calendar}
 
 def run_tool(
     name: str,
@@ -509,6 +705,7 @@ def run_tool(
         "get_courses",
         "get_upcoming_assignments",
         "get_course_file",
+        "add_study_plan_to_canvas_calendar"
     }
 
     try:

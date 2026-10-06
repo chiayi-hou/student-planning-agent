@@ -8,6 +8,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from tools import TOOLS, run_tool, test_canvas_token
 
 # --- Config ---
@@ -85,6 +88,24 @@ SYSTEM_PROMPT = (
 
     "Outside the schedule markers, briefly explain the plan or any important reasoning to the "
     "user. Do not repeat the full schedule outside the markers. "
+
+    "When the user explicitly asks to add, save, or post the currently displayed study "
+    "schedule to Canvas, call add_study_plan_to_canvas_calendar. Add every study block to "
+    "both the user's Canvas Calendar and Canvas My To Do list. Preserve the scheduled start "
+    "and end times for calendar events, and use the corresponding date for the My To Do item. "
+
+    "Only write to Canvas Calendar after an explicit user request. Creating or updating a study "
+    "plan by itself is not permission to add calendar events. If there is no current study "
+    "schedule, do not call the tool; tell the user that a schedule must be created first. "
+
+    "After calling add_study_plan_to_canvas_calendar, report how many events were successfully "
+    "created and whether any failed. Do not claim that events were added unless the tool confirms "
+    "they were successfully created. Do not add the same schedule again unless the user explicitly "
+    "asks to add it again."
+
+    "Do not infer or guess the weekday for a date. If a weekday is not explicitly provided "
+    "in authoritative context, write the calendar date without a weekday rather than risking "
+    "an incorrect weekday."
     )
 MAX_TOOL_ROUNDS = 5
 
@@ -185,8 +206,34 @@ def set_canvas_token(request: CanvasTokenRequest):
 def chat(request: ChatRequest):
     # Get or create the session
     session_id = request.session_id or str(uuid.uuid4())
+    #if session_id not in sessions:
+    #    sessions[session_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
     if session_id not in sessions:
-        sessions[session_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        sessions[session_id] = [
+            {"role": "system", "content": SYSTEM_PROMPT}
+        ]
+
+    now = datetime.now(
+        ZoneInfo("America/New_York")
+    )
+
+    current_time_context = (
+        f"\nThe current date and time is "
+        f"{now.strftime('%A, %B %d, %Y at %I:%M %p')} "
+        f"in America/New_York. "
+        "Use this as the authoritative current date and time. "
+        "Never schedule study work in the past."
+    )
+
+    # Refresh the system message every request
+    sessions[session_id][0] = {
+        "role": "system",
+        "content": SYSTEM_PROMPT + current_time_context,
+    }
+
+    sessions[session_id] += [
+        {"role": "user", "content": request.message}
+    ]
 
     # Append user's message to the context
     sessions[session_id] += [{"role": "user", "content": request.message}]
