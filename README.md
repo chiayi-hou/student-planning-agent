@@ -1,6 +1,9 @@
-# student-planning-agent
+# Student Planning Agent
 
 A web-based student planning assistant powered by Gemini and Columbia CourseWorks (Canvas).
+
+The agent is designed for Columbia students who want help understanding upcoming assignments,
+estimating workload, and planning when to work on different courses.
 
 - The harness loop is based on `qwen-tool-calling`, wrapped in `run_agent()`.
 - The session store and `/chat` endpoint are based on `qwen-web-chat`.
@@ -9,18 +12,28 @@ A web-based student planning assistant powered by Gemini and Columbia CourseWork
   assignment instructions, and linked PDF or Word files.
 - The agent estimates assignment workload and generates a chronological study schedule
   across multiple courses.
-- Users can continue refining the generated schedule through conversation by providing
-  additional availability, preferences, or course-specific constraints.
+- Users can continue refining the generated schedule by providing additional availability,
+  preferences, or course-specific constraints.
 - Once the user is satisfied with the plan, the agent can post the study blocks to the user's
   Canvas Calendar.
-- `/chat` also returns the tool calls made by the harness, and the page displays them
-  above the assistant's response.
+- Tool calls made by the harness are displayed in the chat interface.
 - Generated study schedules are displayed separately in the Study Plan panel and remain
   visible until the agent creates an updated schedule.
 
-## Setup
+## Tools
 
-1. A GCP project with billing and the Agent Platform API enabled.
+- `get_courses` — Gets the user's active Canvas courses and course IDs.
+- `get_upcoming_assignments` — Retrieves future assignments, assignment instructions, and
+  directly linked PDF or Word files for a course.
+- `get_course_file` — Finds and reads a specific PDF or Word file referenced by an assignment.
+- `add_study_plan_to_canvas_calendar` — Posts the user's approved study plan to their personal
+  Canvas Calendar.
+
+## Running the Application on Your Own Device
+
+If you would like to run the application locally instead of using the deployed version:
+
+1. Use a GCP project with billing and the Agent Platform API enabled.
    Older documentation and the endpoint itself may still refer to Vertex AI.
 
 2. Authenticate with Google Cloud:
@@ -40,6 +53,23 @@ A web-based student planning assistant powered by Gemini and Columbia CourseWork
    ```text
    http://localhost:8000
    ```
+
+## How to Use
+
+1. Open the deployed website or run the application locally.
+
+2. Connect your Columbia CourseWorks account using a Canvas access token.
+
+   See the next section, **Connecting Columbia CourseWorks**, for instructions on how to
+   obtain a Canvas access token.
+
+3. Ask the assistant about upcoming assignments, workload, deadlines, or study planning.
+
+4. Review the generated Study Plan on the left side of the interface.
+
+5. Continue refining the plan by telling the assistant about your preferences or constraints.
+
+6. Once the plan looks good, ask the assistant to post the study plan to your Canvas Calendar.
 
 ## Connecting Columbia CourseWorks
 
@@ -70,7 +100,7 @@ To obtain a token from Columbia CourseWorks:
 
 7. Generate the token and copy it.
 
-8. Open the student planning application.
+8. Return to the Student Planning Agent.
 
 9. Paste the token into the **Canvas Access Token** field.
 
@@ -93,206 +123,48 @@ The token is not:
 
 Do not commit or publicly share your Canvas access token.
 
-## How to Use the Website
+## Main Features
 
-After connecting Canvas, you can ask the assistant questions about your courses and assignments.
+### 1. Assignment Understanding
 
-For example:
+The agent retrieves upcoming assignments from Columbia CourseWorks, reads available
+instructions and linked files, and estimates how much time each assignment may take.
 
-```text
-Do I have any upcoming assignments for my computer vision class?
-```
+It can also compare workload across courses and help the user decide which assignments
+should be started first.
 
-The agent can identify the correct course and retrieve its future assignments.
+### 2. Study Plan Creation and Refinement
 
-You can also ask:
+The agent creates a chronological study plan across multiple courses based on assignment
+deadlines, estimated workload, and difficulty.
 
-```text
-How long do you think my statistics homework will take?
-```
+The user can then refine the plan conversationally by providing additional preferences or
+constraints, such as preferred study times, busy days, or professor office hours. The updated
+plan replaces the previous plan in the **Study Plan** panel.
 
-The agent will inspect the assignment instructions and available attached files before
-estimating the workload.
+### 3. Canvas Calendar Integration
 
-To check multiple courses, try:
+Once the user is satisfied with the Study Plan, the agent can post the planned study blocks
+to the user's personal Canvas Calendar.
 
-```text
-What assignments do I have coming up across my courses?
-```
+Each study block is converted into a timed calendar event containing the course, task,
+date, start time, end time, and task description. The agent only writes to Canvas after
+the user explicitly asks it to do so.
 
-The assistant can retrieve assignment information from multiple Canvas courses and
-organize the response by course.
-
-## Study Planning
-
-The assistant can create a chronological study schedule across multiple courses.
-
-For example:
-
-```text
-Make me a study schedule for my upcoming assignments.
-```
-
-The schedule is ordered by day and time rather than grouping all work from one course together.
-
-Work from different courses may be interleaved based on:
-
-- assignment due dates,
-- estimated workload,
-- difficulty,
-- progress needed before the deadline.
-
-The generated schedule is displayed in the **Study Plan** panel on the left side of the interface.
-
-The Study Plan remains visible while you continue chatting.
-
-## Refining the Study Plan
-
-The first generated plan does not have to be final.
-
-After reviewing the plan, you can continue talking to the agent and provide additional
-information about your availability, preferences, or course-specific constraints.
-
-For example:
-
-```text
-I wake up earlier on Wednesday, so you can schedule some work earlier that morning.
-```
-
-```text
-My statistics professor has office hours on Thursday afternoon.
-I want to finish at least half of the homework before then so I know what questions to ask.
-```
-
-```text
-Tuesday is too busy. Move some of the work to Wednesday.
-```
-
-```text
-I want to start the computer vision assignment earlier because I think it will be difficult.
-```
-
-The agent uses the new information to generate an updated chronological plan.
-
-When the schedule is updated, the new plan replaces the previous plan in the
-**Study Plan** panel.
-
-You can continue refining the plan until the schedule fits your actual availability
-and preferences.
-
-## Posting the Plan to Canvas Calendar
-
-Once the Study Plan looks good, you can ask the agent to add it to your Canvas Calendar.
-
-For example:
-
-```text
-This looks good. Post the study plan to my Canvas Calendar.
-```
-
-or:
-
-```text
-Add the schedule on the left to Canvas.
-```
-
-The agent converts each study block into a timed Canvas Calendar event using the planned:
-
-- course and task,
-- date,
-- start time,
-- end time,
-- task description.
-
-The agent only writes to Canvas when the user explicitly asks it to do so.
-
-Creating or editing a study plan by itself does not automatically modify the user's
-Canvas Calendar.
-
-## Agent Tool Flow
-
-Depending on the user's question, the agent may make multiple tool calls.
-
-A typical workflow is:
-
-1. Identify the correct Canvas course using `get_courses`.
-2. Retrieve future assignments using `get_upcoming_assignments`.
-3. Read the assignment description and directly linked PDF or Word files.
-4. If the assignment refers to another course file that was not directly attached,
-   retrieve it using `get_course_file`.
-5. Estimate how much time the assignment may take.
-6. Recommend when the user should begin working.
-7. If requested, generate a chronological study schedule.
-8. Allow the user to refine the schedule by providing additional constraints or preferences.
-9. If the user explicitly approves the schedule and asks to save it, post the study blocks
-   to Canvas using `add_study_plan_to_canvas_calendar`.
-
-The agent is instructed not to invent assignment requirements that are not present in
-the retrieved Canvas content.
-
-## Available Tools
-
-### `get_courses`
-
-Returns the user's active Canvas courses and their Canvas course IDs.
-
-This is used when the user refers to a course by name but the agent does not yet know
-its Canvas course ID.
-
-### `get_upcoming_assignments`
-
-Returns assignments whose due dates have not yet passed for a specific Canvas course.
-
-It includes:
-
-- assignment name,
-- due date,
-- points possible,
-- submission type,
-- assignment instructions,
-- directly linked PDF or Word file contents when available.
-
-Due dates are interpreted using the `America/New_York` timezone.
-
-### `get_course_file`
-
-Searches for and reads a specific file from a Canvas course.
-
-This is used when an assignment description references a PDF or Word file whose
-contents were not already returned by `get_upcoming_assignments`.
-
-### `add_study_plan_to_canvas_calendar`
-
-Adds the user's approved study plan to their personal Canvas Calendar.
-
-Each study block is converted into a timed calendar event containing:
-
-- course and task title,
-- start time,
-- end time,
-- task description.
-
-This tool is only called after the user explicitly asks to add or post the current
-study plan to Canvas.
-
-## Example Prompts
+## Example Queries
 
 Try:
 
 ```text
-Do I have any upcoming assignments for my computer vision class?
+Do I have any upcoming assignments for my [replace_your_course_name_here] class?
 ```
 
 ```text
-What homework do I have for statistics?
+What homework do I have for [replace_your_course_name_here]?
 ```
 
 ```text
-How difficult does this assignment look?
-```
-
-```text
-How long do you think this homework will take?
+How long do you think my [replace_your_course_name_here] homework will take?
 ```
 
 ```text
@@ -300,11 +172,19 @@ What assignments do I have coming up across my courses?
 ```
 
 ```text
+Which assignment should I start first?
+```
+
+```text
 Make me a study schedule for my upcoming assignments.
 ```
 
 ```text
-Update the schedule so I work on computer vision earlier.
+Update the schedule so I work on [replace_your_course_name_here] earlier.
+```
+
+```text
+Make Tuesday lighter and move some work to Wednesday.
 ```
 
 ```text
@@ -317,37 +197,25 @@ Make sure I start the assignment before then.
 ```
 
 ```text
-Make Tuesday lighter and move some work to Wednesday.
-```
-
-```text
-Which assignment should I start first?
-```
-
-```text
 This looks good. Post the plan to my Canvas Calendar.
 ```
 
 ## Notes
 
-This application is currently designed specifically for Columbia University's
-CourseWorks system, which is based on Canvas. It has not been tested with other
-universities' Canvas instances.
+This application is currently designed specifically for Columbia University's CourseWorks
+system, which is based on Canvas. It has not been tested with other universities' Canvas
+instances.
 
-The application uses Columbia CourseWorks data to understand course assignments
-and deadlines.
+The assistant does not automatically know the user's personal class schedule, sleep schedule,
+office hours, or other time commitments unless the user explicitly provides that information.
 
-The assistant does not automatically know the user's personal class schedule,
-sleep schedule, office hours, or other time commitments unless the user explicitly
-provides that information.
+Users can provide these constraints conversationally, and the agent can use them when
+updating the Study Plan.
 
-Users can provide these constraints conversationally, and the agent can use them
-when updating the Study Plan.
-
-The application stores conversation state and Canvas connection information by
-session while the server is running.
+The application stores conversation state and Canvas connection information by session
+while the server is running.
 
 Canvas Calendar events created by the agent are written only after explicit user approval.
 
-For a production system, persistent user authentication and Canvas OAuth could be
-used instead of session-based access-token entry.
+For a production system, persistent user authentication and Canvas OAuth could be used
+instead of session-based access-token entry.
