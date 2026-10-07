@@ -388,10 +388,133 @@
                 #A58CDC 100%
             );
         }
-        </style>
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            background: rgba(0, 0, 0, 0.28);
+            z-index: 9999;
+        }
+
+        .modal-box {
+            position: relative;
+
+            width: min(560px, 90vw);
+            max-height: 80vh;
+            overflow-y: auto;
+
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.18);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.9rem;
+
+            background: transparent;
+            color: #666;
+            border: none;
+
+            font-size: 1.6rem;
+            line-height: 1;
+            padding: 0.2rem;
+
+            cursor: pointer;
+        }
+
+        .modal-close:hover {
+            color: #A58CDC;
+            background: transparent;
+        }
+
+        .modal-box h2 {
+            color: #4F466B;
+            margin-bottom: 1rem;
+        }
+
+        .modal-box h3 {
+            color: #4F466B;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .modal-box p {
+            margin-bottom: 0.8rem;
+            line-height: 1.5;
+        }
+
+        .modal-box ol {
+            margin-left: 1.25rem;
+            line-height: 1.7;
+        }
+
+        .modal-note {
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            color: #777;
+        }
+      body {
+            background:
+                radial-gradient(
+                    ellipse at 8% 95%,
+                    rgba(165, 140, 220, 0.18) 0%,
+                    transparent 45%
+                ),
+                radial-gradient(
+                    ellipse at 24% 82%,
+                    rgba(190, 218, 245, 0.35) 0%,
+                    transparent 52%
+                ),
+                #F8F8F6;
+        }
+    </style>
     </head>
 
     <body>
+        <div id="welcome-modal" class="modal-overlay">
+            <div class="modal-box">
+                <button id="close-modal" class="modal-close">×</button>
+
+                <h2>How to Use</h2>
+
+                <p>
+                    1. Connect your Columbia CourseWorks account using a Canvas access token.
+                </p>
+
+                <p>
+                    2. Ask the assistant about your upcoming assignments, workload, or study plan.
+                </p>
+
+                <p>
+                    3. Review and refine the Study Plan on the left. When it looks good, you can ask
+                    the assistant to post it to your Canvas Calendar.
+                </p>
+
+                <h3>How to Get a Canvas Token</h3>
+
+                <ol>
+                    <li>Go to Columbia CourseWorks.</li>
+                    <li>Click <strong>Account → Settings</strong>.</li>
+                    <li>Scroll to <strong>Approved Integrations</strong>.</li>
+                    <li>Click <strong>+ New Access Token</strong>.</li>
+                    <li>Create a token and copy it.</li>
+                    <li>Paste it into the Canvas Access Token field on this website.</li>
+                </ol>
+
+                <p class="modal-note">
+                    Do not publicly share your Canvas access token.
+                </p>
+            </div>
+        </div>
         <div id="page">
         <h1 id="page-title">Study Plan Creator</h1>
         <p id="page-subtitle">
@@ -439,6 +562,20 @@
         <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 
         <script>
+            const welcomeModal =
+                document.getElementById("welcome-modal");
+
+            const closeModal =
+                document.getElementById("close-modal");
+
+            closeModal.addEventListener("click", () => {
+                welcomeModal.style.display = "none";
+            });
+            welcomeModal.addEventListener("click", (e) => {
+                if (e.target === welcomeModal) {
+                    welcomeModal.style.display = "none";
+                }
+            });
             const canvasToken = document.getElementById("canvas-token");
             const connectCanvasBtn = document.getElementById("connect-canvas-btn");
             const canvasStatus = document.getElementById("canvas-status");
@@ -850,6 +987,8 @@
                 "click",
                 connectCanvas
             );
+
+            
         </script>
     </body>
 </html>
